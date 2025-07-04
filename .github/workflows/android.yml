@@ -2,12 +2,13 @@ name: Android CI
 
 on:
   push:
-    branches: ["*"]
+    branches: ["*"]  
   pull_request:
-    branches: ["*"]
+    branches: ["*"]  
 
 jobs:
-  build:
+
+   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -17,10 +18,12 @@ jobs:
           java-version: "17"
           distribution: adopt
           cache: gradle
-      - run: chmod +x gradlew
-      - run: ./gradlew build
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Build with Gradle
+        run: ./gradlew build
 
-  test:
+   test:
     runs-on: macos-13
     steps:
       - uses: actions/checkout@v3
@@ -30,14 +33,15 @@ jobs:
           java-version: "17"
           distribution: adopt
           cache: gradle
-      - run: chmod +x gradlew
-      - name: Run tests using Android Emulator Runner
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Run tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 29
           script: ./gradlew connectedCheck
 
-  build_and_test:
+   build_and_test:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
@@ -46,30 +50,32 @@ jobs:
         with:
           java-version: "11"
           distribution: adopt
-      - name: Setup Android SDK
-        id: setup_sdk
-        uses: android-automation/action-sdk-installer@v1
-        with:
-          path: ${{ runner.workspace }}/android-sdks
-          packages: |
-            platform-tools
-            platforms;android-30
-            build-tools;30.0.3
-            system-images;android-30;default;x86
-      - name: Update PATH
-        run: echo "${{ steps.setup_sdk.outputs.path }}/tools/bin:${{ steps.setup_sdk.outputs.path }}/cmdline-tools/latest/bin" >> $GITHUB_PATH
-      - name: Accept licenses
-        run: yes | ${{ steps.setup_sdk.outputs.path }}/cmdline-tools/latest/bin/sdkmanager --licenses
-      - name: Install system image
-        run: echo y | sdkmanager "system-images;android-30;default;x86"
+      - name: Download Android Command Line Tools
+        run: |
+          mkdir ~/.android && touch ~/.android/repositories.cfg
+          wget https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
+          unzip commandlinetools-linux-*.zip -d ~/.android/
+          rm commandlinetools-linux-*.zip
+      - name: Install Android SDK Components
+        run: |
+          export ANDROID_SDK_ROOT=~/.android/cmdline-tools/latest
+          yes | $ANDROID_SDK_ROOT/bin/sdkmanager --install "platform-tools" "platforms;android-30" "build-tools;30.0.3" "system-images;android-30;default;x86"
+      - name: Accept Licenses
+        run: |
+          export ANDROID_SDK_ROOT=~/.android/cmdline-tools/latest
+          yes | $ANDROID_SDK_ROOT/bin/sdkmanager --licenses
       - name: Create AVD
-        run: avdmanager create avd -n testAVD -k "system-images;android-30;default;x86" --force
+        run: |
+          export ANDROID_SDK_ROOT=~/.android/cmdline-tools/latest
+          $ANDROID_SDK_ROOT/tools/bin/avdmanager create avd -n testAVD -k "system-images;android-30;default;x86" --force
       - name: Start emulator
         run: |
-          nohup emulator -avd testAVD -no-audio -no-window &
+          export ANDROID_SDK_ROOT=~/.android/cmdline-tools/latest
+          nohup $ANDROID_SDK_ROOT/emulator/emulator -avd testAVD -no-audio -no-window &
           sleep 60
       - name: Run tests
         run: ./gradlew connectedCheck
       - name: Stop emulator
         run: adb emu kill
+
         
