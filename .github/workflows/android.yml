@@ -41,17 +41,35 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v3
-      - name: Set up JDK 11
+      - name: Set up Java
         uses: actions/setup-java@v3
         with:
           java-version: "11"
           distribution: adopt
-      - run: chmod +x gradlew
-      - run: echo y | sdkmanager --install "system-images;android-30;default;x86"
-      - run: avdmanager create avd -n testAVD -k "system-images;android-30;default;x86" --force
-      - run: |
+      - name: Setup Android SDK
+        id: setup_sdk
+        uses: android-automation/action-sdk-installer@v1
+        with:
+          path: ${{ runner.workspace }}/android-sdks
+          packages: |
+            platform-tools
+            platforms;android-30
+            build-tools;30.0.3
+            system-images;android-30;default;x86
+      - name: Update PATH
+        run: echo "${{ steps.setup_sdk.outputs.path }}/tools/bin:${{ steps.setup_sdk.outputs.path }}/cmdline-tools/latest/bin" >> $GITHUB_PATH
+      - name: Accept licenses
+        run: yes | ${{ steps.setup_sdk.outputs.path }}/cmdline-tools/latest/bin/sdkmanager --licenses
+      - name: Install system image
+        run: echo y | sdkmanager "system-images;android-30;default;x86"
+      - name: Create AVD
+        run: avdmanager create avd -n testAVD -k "system-images;android-30;default;x86" --force
+      - name: Start emulator
+        run: |
           nohup emulator -avd testAVD -no-audio -no-window &
           sleep 60
-      - run: ./gradlew connectedCheck
-      - run: adb emu kill
-      
+      - name: Run tests
+        run: ./gradlew connectedCheck
+      - name: Stop emulator
+        run: adb emu kill
+        
